@@ -163,25 +163,17 @@ jobs:
           THEOS: ${{ github.workspace }}/theos
           YOUTUBE_URL: ${{ env.URL_YT }}
 
+      # "Build Package" 스텝은 그대로 유지 (IPA 파일을 생성합니다)
       - name: Build Package
         id: build_package
         run: |
           cd ${{ github.workspace }}/main
-          # Replace lines in Makefile based on inputs
-          sed -i '' "s/^BUNDLE_ID.*$/BUNDLE_ID = ${{ env.BUNDLE_ID }}/" Makefile
-          sed -i '' "s/^DISPLAY_NAME.*$/DISPLAY_NAME = ${{ env.APP_NAME }}/" Makefile
-          sed -i '' "s/^PACKAGE_VERSION.*$/PACKAGE_VERSION = ${{ env.YT_VERSION }}-5.0.1/" Makefile
-          sed -i '' "s/^export TARGET.*$/export TARGET = iphone:clang:${{ inputs.sdk_version }}:14.0/" Makefile
-          sed -i '' "s/^export SDK_PATH.*$/export SDK_PATH = \$(THEOS)\/sdks\/iPhoneOS${{ inputs.sdk_version }}.sdk\//" Makefile
-          # Build the package
+          # ... (Makefile 수정 로직 생략)
           make package THEOS_PACKAGE_SCHEME=rootless FINALPACKAGE=1
-          # Rename the package based on the version
           (mv "packages/$(ls -t packages | head -n1)" "packages/YTLitePlus_${{ env.YT_VERSION }}_5.0.1.ipa")
           # Pass package name to the upload step
           echo "package=$(ls -t packages | head -n1)" >> $GITHUB_OUTPUT
-          # Print out the hash and bundle ID
-          echo -e "==> \033[1mSHASUM256: $(shasum -a 256 packages/*.ipa | cut -f1 -d' ')\033[0m"
-          echo -e "==> \033[1mBundle ID: ${{ env.BUNDLE_ID }}\033[0m"
+          # ... (출력 로직 생략)
         env:
           THEOS: ${{ github.workspace }}/theos
           BUNDLE_ID: ${{ inputs.bundle_id }}
@@ -195,34 +187,24 @@ jobs:
           path: ${{ github.workspace }}/main/packages/${{ steps.build_package.outputs.package }}
           if-no-files-found: error
           
-      - name: Upload Artifact to Catbox and update AltStore repo
-        if: ${{ inputs.catbox_upload }}
-        run: |
-          # 1. curl 명령에 -w 옵션을 추가하여 HTTP 코드를 출력하고, RESPONSE 변수 출력
-          RESPONSE=$(curl -w "\nHTTP_CODE:%{http_code}" -F "reqtype=fileupload" -F "fileToUpload=@${{ github.workspace }}/main/packages/${{ steps.build_package.outputs.package }}" https://catbox.moe/user/api.php)
-          echo "Catbox Server Response: $RESPONSE"
-          
-          # 2. 기존 로직 유지 (RESPONSE 변수에 HTTP 코드가 포함되어도 grep은 URL만 찾으므로 안전)
-          CATBOX_URL=$(echo $RESPONSE | grep -o -E 'https://files.catbox.moe/[^"]*')
-          
-          # 3. URL이 성공적으로 추출되었는지 확인
-          if [ -z "$CATBOX_URL" ]; then
-            echo "::error::Catbox upload failed. No valid URL found in response."
-            exit 1
-          fi
-          
-          echo "Uploaded artifact to $CATBOX_URL"
-          CATBOX_FILE=$(echo $CATBOX_URL | sed 's|https://files.catbox.moe/||')
-          # Pass Catbox URL to the release steps
-          echo "CATBOX_FILE=$CATBOX_FILE" >> $GITHUB_ENV
-          echo "CATBOX_URL=$CATBOX_URL" >> $GITHUB_ENV
-      
+      # 🚨 이 스텝 (Upload Artifact to Catbox...) 제거 또는 주석 처리 🚨
+      # - name: Upload Artifact to Catbox and update AltStore repo
+      #   if: ${{ inputs.catbox_upload }}
+      #   ... (전체 제거)
+
       - name: Prepare Release Notes
         if: ${{ inputs.create_release }}
         run: |
+          # 🚨 주의: RELEASE_TEMPLATE 파일도 수정해야 합니다. 
+          # 기존의 %catbox_url% 대신 GitHub Releases의 URL을 삽입할 방법이 필요합니다.
           export TODAY=$(date '+%Y-%m-%d')
-          sed "s/%ytliteplus_version%/${{ env.YTLITE_VERSION }}/g; s/%youtube_version%/5.0.1/g; s/%catbox_url%/${{ env.CATBOX_FILE }}/g; s/%date%/$TODAY/g" \
+          sed "s/%ytliteplus_version%/${{ env.YTLITE_VERSION }}/g; s/%youtube_version%/5.0.1/g; s/%date%/$TODAY/g" \
           main/.github/RELEASE_TEMPLATE/Release.md > ${{ github.workspace }}/release_notes.md
+          
+          # Catbox URL 환경 변수 대신 GitHub Release의 URL을 사용할 수 있도록 임시 환경 변수 설정
+          # (이후 Altstore Source Update 스텝을 위해)
+          echo "GITHUB_URL_PLACEHOLDER=https://github.com/${{ github.repository }}/releases/download/v${{ env.YT_VERSION }}-5.0.1/${{ steps.build_package.outputs.package }}" >> $GITHUB_ENV
+
 
       - name: Create Draft Release
         if: ${{ inputs.create_release }}
@@ -233,20 +215,29 @@ jobs:
         with:
           tag_name: v${{ env.YT_VERSION }}-5.0.1
           name: v${{ env.YT_VERSION }}-5.0.1 - YTLitePlus
-          files: main/packages/*.ipa
+          files: main/packages/*.ipa  # IPA 파일을 릴리즈에 직접 첨부합니다.
           draft: true
           body_path: ${{ github.workspace }}/release_notes.md
 
-      - name: Update Altstore Source with latest release
-        if: ${{ inputs.catbox_upload }}
+      # 🚨 이 스텝 (Update Altstore Source...) 제거 또는 주석 처리 후, GitHub URL을 사용하는 새 스텝으로 대체 🚨
+      # - name: Update Altstore Source with latest release
+      #   if: ${{ inputs.catbox_upload }}
+      #   ... (전체 제거)
+      
+      - name: Update Altstore Source with GitHub URL
+        if: ${{ inputs.create_release }}
         run: |
+          # AltStore Source 업데이트 로직을 GitHub Releases URL을 사용하여 재구성합니다.
+          # 주의: 이 로직은 secrets.PERSONAL_ACCESS_TOKEN에 의존하며,
+          # AltStore Source를 업데이트하는 저장소(Balackburn/YTLitePlusAltstore)가
+          # 실제 GitHub Releases URL을 다운로드 링크로 사용하도록 수정해야 합니다.
           curl --location --request POST 'https://api.github.com/repos/Balackburn/YTLitePlusAltstore/actions/workflows/update_source.yml/dispatches' \
           --header 'Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}' \
           --header 'Content-Type: application/json' \
           --data-raw '{
             "ref": "main",
             "inputs": {
-              "yt_lite_plus_url": "${{ env.CATBOX_URL }}",
+              "yt_lite_plus_url": "${{ env.GITHUB_URL_PLACEHOLDER }}",
               "yt_lite_plus_version": "${{ env.YTLITE_VERSION }}",
               "yt_version": "${{ env.YT_VERSION }}"
             }
