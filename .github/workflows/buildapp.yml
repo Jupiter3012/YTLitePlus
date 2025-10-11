@@ -198,8 +198,19 @@ jobs:
       - name: Upload Artifact to Catbox and update AltStore repo
         if: ${{ inputs.catbox_upload }}
         run: |
-          RESPONSE=$(curl -F "reqtype=fileupload" -F "fileToUpload=@${{ github.workspace }}/main/packages/${{ steps.build_package.outputs.package }}" https://catbox.moe/user/api.php)
+          # 1. curl 명령에 -w 옵션을 추가하여 HTTP 코드를 출력하고, RESPONSE 변수 출력
+          RESPONSE=$(curl -w "\nHTTP_CODE:%{http_code}" -F "reqtype=fileupload" -F "fileToUpload=@${{ github.workspace }}/main/packages/${{ steps.build_package.outputs.package }}" https://catbox.moe/user/api.php)
+          echo "Catbox Server Response: $RESPONSE"
+          
+          # 2. 기존 로직 유지 (RESPONSE 변수에 HTTP 코드가 포함되어도 grep은 URL만 찾으므로 안전)
           CATBOX_URL=$(echo $RESPONSE | grep -o -E 'https://files.catbox.moe/[^"]*')
+          
+          # 3. URL이 성공적으로 추출되었는지 확인
+          if [ -z "$CATBOX_URL" ]; then
+            echo "::error::Catbox upload failed. No valid URL found in response."
+            exit 1
+          fi
+          
           echo "Uploaded artifact to $CATBOX_URL"
           CATBOX_FILE=$(echo $CATBOX_URL | sed 's|https://files.catbox.moe/||')
           # Pass Catbox URL to the release steps
