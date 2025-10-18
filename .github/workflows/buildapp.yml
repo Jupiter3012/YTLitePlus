@@ -8,7 +8,7 @@ on:
     inputs:
       sdk_version:
         description: "iOS SDK Version"
-        default: "17.5"
+        default: "26.0"
         required: true
         type: string
       decrypted_youtube_url:
@@ -90,23 +90,13 @@ jobs:
       - name: Download iOS SDK
         if: steps.SDK.outputs.cache-hit != 'true'
         run: |
-          # 1. 대상 디렉토리 생성 (이전에 추가됨)
           mkdir -p $THEOS/sdks
-    
-          # 2. 전체 레포지토리를 sparse clone
           SDK_VERSION=iPhoneOS${{ inputs.sdk_version }}.sdk
           git clone -n --depth=1 --filter=tree:0 https://github.com/aricloverALT/sdks/ temp_sdks
-    
-          # 3. 필요한 SDK 파일만 다운로드 (파일 전체를 복사하는 방식으로 변경)
           cd temp_sdks
           git sparse-checkout set --no-cone $SDK_VERSION
           git checkout
-    
-          # 4. 다운로드된 SDK를 $THEOS/sdks로 복사
-          # 'mv' 대신 'cp -r'을 사용하고, 상위 디렉토리로 이동하여 복사합니다.
-          cp -r "$SDK_VERSION" "$THEOS/sdks/" 
-          
-          # 5. 임시 디렉토리 정리
+          cp -r "$SDK_VERSION" "$THEOS/sdks/"
           cd ..
           rm -rf temp_sdks
     
@@ -177,17 +167,14 @@ jobs:
           THEOS: ${{ github.workspace }}/theos
           YOUTUBE_URL: ${{ env.URL_YT }}
 
-      # "Build Package" 스텝은 그대로 유지 (IPA 파일을 생성합니다)
       - name: Build Package
         id: build_package
         run: |
           cd ${{ github.workspace }}/main
-          # ... (Makefile 수정 로직 생략)
           make package THEOS_PACKAGE_SCHEME=rootless FINALPACKAGE=1
           (mv "packages/$(ls -t packages | head -n1)" "packages/YTLitePlus_${{ env.YT_VERSION }}_5.0.1.ipa")
           # Pass package name to the upload step
           echo "package=$(ls -t packages | head -n1)" >> $GITHUB_OUTPUT
-          # ... (출력 로직 생략)
         env:
           THEOS: ${{ github.workspace }}/theos
           BUNDLE_ID: ${{ inputs.bundle_id }}
@@ -201,22 +188,13 @@ jobs:
           path: ${{ github.workspace }}/main/packages/${{ steps.build_package.outputs.package }}
           if-no-files-found: error
           
-      # 🚨 이 스텝 (Upload Artifact to Catbox...) 제거 또는 주석 처리 🚨
-      # - name: Upload Artifact to Catbox and update AltStore repo
-      #   if: ${{ inputs.catbox_upload }}
-      #   ... (전체 제거)
-
       - name: Prepare Release Notes
         if: ${{ inputs.create_release }}
         run: |
-          # 🚨 주의: RELEASE_TEMPLATE 파일도 수정해야 합니다. 
-          # 기존의 %catbox_url% 대신 GitHub Releases의 URL을 삽입할 방법이 필요합니다.
           export TODAY=$(date '+%Y-%m-%d')
           sed "s/%ytliteplus_version%/${{ env.YTLITE_VERSION }}/g; s/%youtube_version%/5.0.1/g; s/%date%/$TODAY/g" \
           main/.github/RELEASE_TEMPLATE/Release.md > ${{ github.workspace }}/release_notes.md
           
-          # Catbox URL 환경 변수 대신 GitHub Release의 URL을 사용할 수 있도록 임시 환경 변수 설정
-          # (이후 Altstore Source Update 스텝을 위해)
           echo "GITHUB_URL_PLACEHOLDER=https://github.com/${{ github.repository }}/releases/download/v${{ env.YT_VERSION }}-5.0.1/${{ steps.build_package.outputs.package }}" >> $GITHUB_ENV
 
 
@@ -229,22 +207,13 @@ jobs:
         with:
           tag_name: v${{ env.YT_VERSION }}-5.0.1
           name: v${{ env.YT_VERSION }}-5.0.1 - YTLitePlus
-          files: main/packages/*.ipa  # IPA 파일을 릴리즈에 직접 첨부합니다.
+          files: main/packages/*.ipa
           draft: true
           body_path: ${{ github.workspace }}/release_notes.md
 
-      # 🚨 이 스텝 (Update Altstore Source...) 제거 또는 주석 처리 후, GitHub URL을 사용하는 새 스텝으로 대체 🚨
-      # - name: Update Altstore Source with latest release
-      #   if: ${{ inputs.catbox_upload }}
-      #   ... (전체 제거)
-      
       - name: Update Altstore Source with GitHub URL
         if: ${{ inputs.create_release }}
         run: |
-          # AltStore Source 업데이트 로직을 GitHub Releases URL을 사용하여 재구성합니다.
-          # 주의: 이 로직은 secrets.PERSONAL_ACCESS_TOKEN에 의존하며,
-          # AltStore Source를 업데이트하는 저장소(Balackburn/YTLitePlusAltstore)가
-          # 실제 GitHub Releases URL을 다운로드 링크로 사용하도록 수정해야 합니다.
           curl --location --request POST 'https://api.github.com/repos/Balackburn/YTLitePlusAltstore/actions/workflows/update_source.yml/dispatches' \
           --header 'Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}' \
           --header 'Content-Type: application/json' \
