@@ -90,16 +90,29 @@ jobs:
       - name: Download iOS SDK
         if: steps.SDK.outputs.cache-hit != 'true'
         run: |
+          # 1. 대상 디렉토리 생성 (이전에 추가됨)
           mkdir -p $THEOS/sdks
-          # Only download the specific SDK version
-          git clone -n --depth=1 --filter=tree:0 https://github.com/aricloverALT/sdks/
-          cd sdks
-          git sparse-checkout set --no-cone iPhoneOS${{ inputs.sdk_version }}.sdk
+    
+          # 2. 전체 레포지토리를 sparse clone
+          SDK_VERSION=iPhoneOS${{ inputs.sdk_version }}.sdk
+          git clone -n --depth=1 --filter=tree:0 https://github.com/aricloverALT/sdks/ temp_sdks
+    
+          # 3. 필요한 SDK 파일만 다운로드 (파일 전체를 복사하는 방식으로 변경)
+          cd temp_sdks
+          git sparse-checkout set --no-cone $SDK_VERSION
           git checkout
-          mv *.sdk $THEOS/sdks
+    
+          # 4. 다운로드된 SDK를 $THEOS/sdks로 복사
+          # 'mv' 대신 'cp -r'을 사용하고, 상위 디렉토리로 이동하여 복사합니다.
+          cp -r "$SDK_VERSION" "$THEOS/sdks/" 
+          
+          # 5. 임시 디렉토리 정리
+          cd ..
+          rm -rf temp_sdks
+    
         env:
           THEOS: ${{ github.workspace }}/theos
-
+      
       - name: Download Theos Jailed
         uses: actions/checkout@v4
         with:
