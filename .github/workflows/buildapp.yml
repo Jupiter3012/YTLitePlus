@@ -90,9 +90,7 @@ jobs:
       - name: Download iOS SDK
         if: steps.SDK.outputs.cache-hit != 'true'
         run: |
-          # SDK를 다운로드하기 전에 대상 디렉토리를 생성합니다.
-          mkdir -p $THEOS/sdks  # 💡 이 줄을 추가해야 합니다!
-    
+          mkdir -p $THEOS/sdks
           # Only download the specific SDK version
           git clone -n --depth=1 --filter=tree:0 https://github.com/aricloverALT/sdks/
           cd sdks
