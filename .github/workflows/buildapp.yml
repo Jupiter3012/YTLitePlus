@@ -91,6 +91,25 @@ jobs:
         if: steps.SDK.outputs.cache-hit != 'true'
         run: |
           mkdir -p $THEOS/sdks
+          SDK_FILENAME=iPhoneOS17.5.sdk 
+    
+          git clone -n --depth=1 --filter=tree:0 https://github.com/aricloverALT/sdks/ temp_sdks
+          cd temp_sdks
+          git sparse-checkout set --no-cone $SDK_FILENAME
+          git checkout
+    
+          cp -r "$SDK_FILENAME" "$THEOS/sdks/" 
+    
+          cd ..
+          rm -rf temp_sdks
+        env:
+          THEOS: ${{ github.workspace }}/theos
+
+
+      - name: Download iOS SDK
+        if: steps.SDK.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p $THEOS/sdks
           SDK_VERSION=iPhoneOS${{ inputs.sdk_version }}.sdk
           git clone -n --depth=1 --filter=tree:0 https://github.com/aricloverALT/sdks/ temp_sdks
           cd temp_sdks
@@ -179,7 +198,7 @@ jobs:
     
           echo "export TARGET = iphone:clang:${{ inputs.sdk_version }}:14.0" >> Makefile
           echo "export SDK_PATH = \$(THEOS)/sdks/iPhoneOS${{ inputs.sdk_version }}.sdk/" >> Makefile
-    
+          
           sed -i '' "s/^BUNDLE_ID.*$/BUNDLE_ID = ${{ env.BUNDLE_ID }}/" Makefile
           sed -i '' "s/^DISPLAY_NAME.*$/DISPLAY_NAME = ${{ env.APP_NAME }}/" Makefile
           sed -i '' "s/^PACKAGE_VERSION.*$/PACKAGE_VERSION = ${{ env.YT_VERSION }}-5.0.1/" Makefile
