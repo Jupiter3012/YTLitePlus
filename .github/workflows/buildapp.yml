@@ -170,20 +170,28 @@ jobs:
       - name: Build Package
         id: build_package
         run: |
-            cd ${{ github.workspace }}/main
-            sed -i '' '/TARGET/d' Makefile
-            sed -i '' '/SDK_PATH/d' Makefile
+
+          export THEOS=${{ github.workspace }}/theos 
     
-            echo "export TARGET = iphone:clang:${{ inputs.sdk_version }}:14.0" >> Makefile
-            echo "export SDK_PATH = \$(THEOS)/sdks/iPhoneOS${{ inputs.sdk_version }}.sdk/" >> Makefile
+          cd ${{ github.workspace }}/main
+          sed -i '' '/TARGET/d' Makefile
+          sed -i '' '/SDK_PATH/d' Makefile
     
-            sed -i '' "s/^BUNDLE_ID.*$/BUNDLE_ID = ${{ env.BUNDLE_ID }}/" Makefile
-            sed -i '' "s/^DISPLAY_NAME.*$/DISPLAY_NAME = ${{ env.APP_NAME }}/" Makefile
-            sed -i '' "s/^PACKAGE_VERSION.*$/PACKAGE_VERSION = ${{ env.YT_VERSION }}-5.0.1/" Makefile
+          echo "export TARGET = iphone:clang:${{ inputs.sdk_version }}:14.0" >> Makefile
+          echo "export SDK_PATH = \$(THEOS)/sdks/iPhoneOS${{ inputs.sdk_version }}.sdk/" >> Makefile
     
-            make package THEOS_PACKAGE_SCHEME=rootless FINALPACKAGE=1
-            (mv "packages/$(ls -t packages | head -n1)" "packages/YTLitePlus_${{ env.YT_VERSION }}_5.0.1.ipa")
-            echo "package=$(ls -t packages | head -n1)" >> $GITHUB_OUTPUT
+          sed -i '' "s/^BUNDLE_ID.*$/BUNDLE_ID = ${{ env.BUNDLE_ID }}/" Makefile
+          sed -i '' "s/^DISPLAY_NAME.*$/DISPLAY_NAME = ${{ env.APP_NAME }}/" Makefile
+          sed -i '' "s/^PACKAGE_VERSION.*$/PACKAGE_VERSION = ${{ env.YT_VERSION }}-5.0.1/" Makefile
+    
+          make package THEOS_PACKAGE_SCHEME=rootless FINALPACKAGE=1
+          (mv "packages/$(ls -t packages | head -n1)" "packages/YTLitePlus_${{ env.YT_VERSION }}_5.0.1.ipa")
+          echo "package=$(ls -t packages | head -n1)" >> $GITHUB_OUTPUT
+          
+        env:
+          THEOS: ${{ github.workspace }}/theos 
+          BUNDLE_ID: ${{ inputs.bundle_id }}
+          APP_NAME: ${{ inputs.app_name }}
 
       - name: Upload Artifact
         if: ${{ inputs.upload_artifact }}
